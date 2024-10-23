@@ -6,16 +6,20 @@ import (
 	"github.com/alecthomas/assert/v2"
 )
 
-type testStruct struct {
+type TestStruct struct {
 	Int        int
 	String     string
 	unExported int
 }
 
 func TestMarshal(t *testing.T) {
-	s := testStruct{Int: 1, String: "something", unExported: 112}
+	s := TestStruct{Int: 1, String: "something", unExported: 112}
 	stream, err := Marshal(s)
-	obj, err := UnMarshal(&testStruct{}, stream))
+	if err != nil {
+		// panic(err)
+		panic(err)
+	}
+	err = UnMarshal(&TestStruct{}, stream)
 	// assert.Equal(err, nil)
 	assert.Equal(t, nil, err)
 }
