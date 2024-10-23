@@ -67,14 +67,17 @@ func MarshalArguments(arguments ...any) ([]byte, error) {
 	// binary.Write(buffer, binary.BigEndian, MAGIC_END) // 写入结束魔数
 
 	// <--4bytes magicStart ------ 4bytes --------------------   k bytes -------------------------------   x bytes ---- magicEnd
-	//   MAGIC_START         k for params quantity          int array for next x(from k bytes) bytes             actual params    MAGIC_END
+	//   MAGIC_START         k for params count          int array for next 4*k bytes             actual params    MAGIC_END
 
 	resultBuffer.Write(MAGIC_START[:])                                  // 写入开始魔数
 	binary.Write(resultBuffer, binary.BigEndian, int32(len(arguments))) // 写入k 表示接下来会有k 个参数
 	resultBuffer.Write(types)                                           // 写入k值 代表k个元素的类型
-	binary.Write(resultBuffer, binary.BigEndian, paramLens)             // 写入k 个数字  表示接下来k个参数分别占用多少字节
-	resultBuffer.Write(buffer.Bytes())                                  // 写入具体的参数信息
-	resultBuffer.Write(MAGIC_END[:])                                    // 写入结束魔数
+	// binary.Write(resultBuffer, binary.BigEndian, paramLens)             // 写入k 个数字  表示接下来k个参数分别占用多少字节
+	for _, v := range paramLens {
+		binary.Write(resultBuffer, binary.BigEndian, uint32(v))
+	}
+	resultBuffer.Write(buffer.Bytes()) // 写入具体的参数信息
+	resultBuffer.Write(MAGIC_END[:])   // 写入结束魔数
 	return resultBuffer.Bytes(), nil
 }
 
@@ -116,6 +119,7 @@ func UnMarshalArgument(obj any, data []byte) error {
 
 	// 确认参数个数
 	paramCount := int(binary.BigEndian.Uint32(buffer.Next(4)))
+	lens := make([]int, paramCount, paramCount)
 	fmt.Printf("paramCount = %d\n", paramCount)
 	paramTypes := make([]byte, paramCount, paramCount)
 
@@ -131,6 +135,11 @@ func UnMarshalArgument(obj any, data []byte) error {
 		fmt.Printf("i = %d, k = %d\n", i, k)
 		paramTypes[i] = byte(k)
 	}
+	for i := range paramCount {
+		currentParamLen := int(binary.BigEndian.Uint32(buffer.Next(4)))
+		lens[i] = currentParamLen
+	}
+	fmt.Printf("lens = %+v\n", lens)
 
 	return nil
 }
