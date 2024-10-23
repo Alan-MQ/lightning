@@ -61,17 +61,21 @@ func MarshalArguments(arguments ...any) ([]byte, error) {
 			}
 		}
 	}
-	fmt.Printf("before write to the buffer types = %+v\n", types)
-	fmt.Printf("before write to the buffer buffer = %+v\n", buffer)
-	buffer.Write(types) // 写入k值 代表k个元素的类型
-	fmt.Printf("after write to the buffer buffer = %+v\n", buffer)
+	// buffer.Write(types) // 写入k值 代表k个元素的类型
 	// binary.Write(buffer, binary.BigEndian, paramLens) // 写入k个元素 代表接下来的k个参数分别占用多少字节
 	// binary.Write(buffer, binary.BigEndian, arguments) // 写入k个参数
 	// binary.Write(buffer, binary.BigEndian, MAGIC_END) // 写入结束魔数
 
+	// <--4bytes magicStart ------ 4bytes --------------------   k bytes -------------------------------   x bytes ---- magicEnd
+	//   MAGIC_START         k for params quantity          int array for next x(from k bytes) bytes             actual params    MAGIC_END
+
 	resultBuffer.Write(MAGIC_START[:])                                  // 写入开始魔数
 	binary.Write(resultBuffer, binary.BigEndian, int32(len(arguments))) // 写入k 表示接下来会有k 个参数
-	return buffer.Bytes(), nil
+	resultBuffer.Write(types)                                           // 写入k值 代表k个元素的类型
+	binary.Write(resultBuffer, binary.BigEndian, paramLens)             // 写入k 个数字  表示接下来k个参数分别占用多少字节
+	resultBuffer.Write(buffer.Bytes())                                  // 写入具体的参数信息
+	resultBuffer.Write(MAGIC_END[:])                                    // 写入结束魔数
+	return resultBuffer.Bytes(), nil
 }
 
 func Marshal(obj any) ([]byte, error) {
