@@ -87,7 +87,6 @@ func Marshal(obj any) ([]byte, error) {
 		return nil, errors.New("Must be struct")
 	}
 
-	// 这里拿到所有key 对应的value
 	for i := 0; i < val.NumField(); i++ {
 		fmt.Printf("i = %d, val = %v\n", i, val.Field(i))
 		if !typ.Field(i).IsExported() {
@@ -106,10 +105,10 @@ func Marshal(obj any) ([]byte, error) {
 }
 
 func UnMarshalArgument(obj any, data []byte) error {
-	// 这里需要把二进制数据解析到结构体里， 但是结构体应该有哪些key呢？
-	// 每次解析的对象都是固定的吗？
+	// TODO: 1. figure out what is the key to the obj
+	// 2. if there is multiple string how to make sure the value matches to the right key?
 	buffer := bytes.NewBuffer(data)
-	// 确认是lightning 协议
+	// make sure it's lightning protocol
 	header := buffer.Next(4)
 	if !bytes.Equal(header, MAGIC_START[:]) {
 		return errors.New("not a lightning protocol")
