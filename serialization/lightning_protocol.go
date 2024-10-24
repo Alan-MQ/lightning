@@ -107,18 +107,21 @@ func Marshal(obj any) ([]byte, error) {
 	return stream, nil
 }
 
-func UnMarshalArgument(obj any, data []byte) error {
+func UnMarshalArgument(obj any, data []byte) ([]any, error) {
 	// TODO: 1. figure out what is the key to the obj
+	// ans : u don't have to , cuz reflect.NumField already set up the order , u just apply the value under that order.
 	// 2. if there is multiple string how to make sure the value matches to the right key?
+	// ans : like wise.
 	buffer := bytes.NewBuffer(data)
 	// make sure it's lightning protocol
 	header := buffer.Next(4)
 	if !bytes.Equal(header, MAGIC_START[:]) {
-		return errors.New("not a lightning protocol")
+		return nil, errors.New("not a lightning protocol")
 	}
 
 	// 确认参数个数
 	paramCount := int(binary.BigEndian.Uint32(buffer.Next(4)))
+	arguments := make([]any, paramCount, paramCount)
 	lens := make([]int, paramCount, paramCount)
 	fmt.Printf("paramCount = %d\n", paramCount)
 	paramTypes := make([]byte, paramCount, paramCount)
@@ -126,7 +129,7 @@ func UnMarshalArgument(obj any, data []byte) error {
 	_, err := buffer.Read(paramTypes)
 	if err != nil {
 		fmt.Printf("error reading paramTypes, %v", err)
-		return err
+		return nil, err
 	}
 	fmt.Printf("paramTypes = %+v\n", paramTypes)
 	//paramLengths := make([]int, paramCount, paramCount)
@@ -139,11 +142,54 @@ func UnMarshalArgument(obj any, data []byte) error {
 		currentParamLen := int(binary.BigEndian.Uint32(buffer.Next(4)))
 		lens[i] = currentParamLen
 	}
-	fmt.Printf("lens = %+v\n", lens)
 
-	return nil
+	fmt.Printf("lens = %+v\n", lens)
+	for i := range paramCount {
+		var arg any
+		currentType := paramTypes[i]
+		paramLen := lens[i]
+		content := buffer.Next(paramLen)
+		fmt.Printf("currentType = %d, paramLen = %d, content = %+v\n", currentType, paramLen, content)
+		switch currentType {
+		case L_STRING:
+			arg = string(content)
+			fmt.Printf("arg = %d\n", arg)
+		case L_INT:
+			arg = int(binary.BigEndian.Uint32(content))
+			fmt.Printf("arg = %d\n", arg)
+		}
+		arguments[i] = arg
+	}
+	fmt.Printf("lens = %+v\n", lens)
+	fmt.Printf("arguments = %+v\n", arguments)
+
+	return arguments, nil
 }
 
 func UnMarshal(obj any, data []byte) error {
-	return UnMarshalArgument(obj, data)
+	typ := reflect.TypeOf(obj)
+	value := reflect.ValueOf(obj)
+	if typ.Kind() != reflect.Ptr {
+		return errors.New("obj must be a pointer")
+	}
+	typ = typ.Elem()
+	value = value.Elem()
+
+	if typ.Kind() != reflect.Struct {
+		return errors.New("obj must be a struct")
+	}
+	arguments, err := UnMarshalArgument(obj, data)
+	if err != nil {
+		fmt.Printf("error unmarshaling arguments, %v", err)
+		return err
+	}
+
+	for i := 0; i < typ.NumField(); i++ {
+		if !typ.Field(i).IsExported() {
+			continue
+		}
+		value.Field(i).Set(reflect.ValueOf(arguments[i]))
+	}
+	fmt.Printf("obj = %+v\n", obj)
+	return nil
 }
