@@ -1,76 +1,199 @@
-# 1. What is Lighting RPC anyway?
+# Lightning RPC Framework
 
-## 2. What this project intend to address?
+一个用Go实现的高性能RPC框架，支持自定义二进制协议和多种序列化方式。
 
-concept：
+## 项目简介
 
-- does rpc needs reflect ? why is that?
-- how proto works for rpc ? can we get rid of that?
+Lightning RPC是一个学习型RPC框架项目，旨在深入理解RPC框架的核心原理和实现细节。通过从零开始构建RPC框架，我们将探索：
 
-coding detail：
+- 自定义二进制协议的设计与实现
+- 序列化与反序列化机制
+- 服务发现与负载均衡
+- 连接管理与性能优化
+- 系统可靠性与监控
 
-- how to extract a whole packet from tcp connection?
-- Why byte order matters ? `BigEndian`
-    - buffer.Write need to know about byte order ? how about binary.Write？
-- 
+## 🗺️ 开发Roadmap
 
-## 3. What happens when rpc call fired?
+### ✅ 当前状态 (v0.1)
+- [x] 基础RPC通信功能
+- [x] 自定义Lightning协议（支持int64和string）
+- [x] 可插拔编解码器（Gob、JSON、Lightning）
+- [x] 基于反射的序列化机制
 
-## 4. Why we need reflect anyway?
+### 🚧 Phase 1: 核心RPC增强 (进行中)
+**目标**: 完善基础RPC功能，实现真正的服务调用
 
-所以到底为什么我们在写RPC 框架的时候都在用反射呢？
+- [ ] **服务注册与方法调用**
+  - 实现服务注册机制
+  - 支持方法名路由（如 `Calculator.Add`）
+  - 动态方法调用而非硬编码响应
+- [ ] **客户端代理生成**
+  - 自动生成客户端调用代理
+  - 支持同步和异步调用
+- [ ] **统一错误处理**
+  - 错误码定义与传播机制
 
-详细聊聊这两点以及他们的解决方案
+### 📋 Phase 2: 连接管理与性能优化
+**目标**: 实现连接池和性能优化
 
-### 4.1 调用方不知道服务器提供了哪些函数以及这些函数的具体参数的类型
+- [ ] **连接池管理**
+  - 客户端连接池
+  - 连接复用与生命周期管理
+  - 连接健康检查
+- [ ] **超时与重试**
+  - 可配置请求超时
+  - 智能重试策略（指数退避）
+  - 请求去重
+- [ ] **并发控制**
+  - 请求限流
+  - 服务端并发控制
 
-   首先， 客户端在调用服务端提供的rpc的时候不知道方法有哪些以及他们的参数， 我来举一个例子
+### 📋 Phase 3: 服务发现与负载均衡
+**目标**: 实现分布式RPC核心功能
 
-你可能已经很熟悉http 格式以及传输方式了， http 里有一个content-type  经常使用 application/json， 这意味着 http 的body 是按照json数据格式传输的（当然你还可以选择其他 xml等），json 的内容是在运行时才能知道的， 也就是说 服务端收到json 的数据之后要 Parse 一下才能知道 里面的内容。 这就是反序列化的过程。
+- [ ] **服务注册中心**
+  - 内存注册中心实现
+  - 服务注册、发现、心跳
+  - 多实例服务支持
+- [ ] **客户端负载均衡**
+  - Round Robin算法
+  - 加权随机算法
+  - 最少连接数算法
+- [ ] **健康检查**
+  - 主动健康检查
+  - 被动故障检测
 
-然而json 因为基于文本， 发送之前要转换成字符串等原因 效率比较低， rpc 一般选择pb 或者私有协议 来做。
+### 📋 Phase 4: 可靠性与监控
+**目标**: 实现生产级可靠性保证
 
-pb 很好理解， pb  有工具生成桩代码， 这样客户端和服务端都能知道 提供了什么方法， 都有哪些参数， 这些参数的类型都是什么。 而且 二进制发送数据 很高校
+- [ ] **熔断器模式**
+  - 基于失败率的熔断
+  - 半开状态恢复
+- [ ] **监控与追踪**
+  - 请求耗时统计
+  - QPS监控  
+  - 调用链追踪
+- [ ] **配置管理**
+  - 动态配置更新
+  - 配置热重载
 
-私有协议， on the other hand, just like what we did on this project. You have to implement the marshal and unMarshal method yourself.
+### 📋 Phase 5: 高级特性 (可选)
+**目标**: 实现高级RPC特性
 
-### 4.2 服务端的序列化反序列化的过程会很难处理 如果没有reflect
+- [ ] **流式RPC**
+  - 客户端流/服务端流
+  - 双向流
+- [ ] **压缩与加密**
+  - 数据压缩支持
+  - TLS加密通信
 
-想象一下 如果没有 reflect 服务端要处理一个很大很复杂的对象， 这个时候要怎么写入这么多复杂的key ， 对象呢？ 很麻烦， 而且业务逻辑改动 或者增加新的功能的时候 需要写大量的代码来维护 序列化和反序列化的过程， 这是非常痛苦的。
+## 🏗️ 架构设计
 
-# 5. serialization
+### 核心组件
+- **Server** (`server/`): RPC服务器实现
+- **Client** (`client/`): 客户端实现  
+- **Codec** (`codec/`): 可插拔编解码器
+- **Serialization** (`serialization/`): Lightning协议实现
+- **Registry** (`registry/`): 服务注册与发现 *(计划中)*
+- **LoadBalancer** (`loadbalancer/`): 负载均衡 *(计划中)*
 
-## 5.1 Concept
+### Lightning协议特性
+- 自定义二进制序列化（当前支持int64和string）
+- 魔数标识包边界
+- Big-endian字节序保证跨平台兼容
+- 包格式：`[MAGIC_START][参数数量][参数类型][参数长度][参数数据][MAGIC_END]`
 
-- lighting protocol is just like json or protocol buffer or jce or gob they are same level
-- It’s all about serialization and deserialization
+## 🚀 快速开始
 
-### 5.2 Why ByteOrder matters?  —binary.BigEndian
+### 运行示例
+```bash
+go run main/main.go
+```
 
-well , you actually don’t need to worry about byte order if u only got one byte. cuz byte order works between the bytes, I mean like
+### 运行测试
+```bash
+go test ./...                    # 运行所有测试
+go test ./serialization          # 测试Lightning协议
+go test -v ./serialization       # 详细测试输出
+```
 
-**Example**:
+### 构建项目
+```bash
+go build ./main                  # 构建主程序
+go build .                       # 构建所有包
+```
 
-- Consider the integer `0x12345678`, which is 4 bytes:
-    - In **big-endian** format, it would be stored in memory as:
-        
-        ```
-        Address:   0x00  0x01  0x02  0x03
-        Value:     0x12  0x34  0x56  0x78
-        ```
-        
-    - In **little-endian** format, it would be stored as:
-        
-        ```
-        Address:   0x00  0x01  0x02  0x03
-        Value:     0x78  0x56  0x34  0x12
-        ```
-        
-- For a single byte, say `0xAB`, it is simply stored as:
-    
-    ```
-    Address:   0x00
-    Value:     0xAB
-    ```
-    
-- There is no order to consider because there is only one byte.
+### 代码质量检查
+```bash
+go fmt ./...                     # 格式化代码
+go vet ./...                     # 静态分析
+go mod tidy                      # 清理依赖
+```
+
+## 🧠 学习要点
+
+### 为什么需要反射？
+RPC框架中反射主要解决两个问题：
+
+1. **动态方法调用**: 客户端不知道服务端提供哪些方法及参数类型
+2. **通用序列化**: 服务端需要处理任意复杂对象的序列化/反序列化
+
+### 字节序的重要性
+使用`binary.BigEndian`确保跨平台兼容：
+- 网络字节序标准
+- 不同架构间数据交换一致性
+- 只有多字节数据才需要考虑字节序
+
+### Lightning协议详解
+
+**为什么要自定义协议？**
+- **性能**: 比JSON更高效的二进制传输
+- **控制**: 完全掌控序列化/反序列化过程
+- **学习**: 深入理解数据编码原理
+
+**协议格式示例**:
+```
+Magic Start (4字节) | 参数数量 (4字节) | 参数类型数组 | 参数长度数组 | 参数数据 | Magic End (4字节)
+[33,44,55,12]      | 0x00000002      | [4,3]        | [4,11]       | 数据... | [23,84,55,29]
+```
+
+### TCP连接处理
+**如何从TCP连接中提取完整数据包？**
+- 使用魔数标记包边界
+- 先读取固定长度的头部获取数据长度
+- 根据长度读取完整包体
+- 验证结束魔数确保数据完整性
+
+## 📚 技术栈
+
+- **语言**: Go 1.22+
+- **网络**: TCP socket
+- **序列化**: 自定义二进制协议 + Gob + JSON
+- **测试**: Go标准库 + assert库
+
+## 🤝 开发计划
+
+这个项目采用渐进式开发方式，每个阶段都有明确的学习目标和可运行的代码。通过实现这些功能，我们将深入理解：
+
+- RPC框架架构设计原理
+- 分布式系统核心问题与解决方案  
+- 负载均衡与服务发现实现细节
+- 系统可靠性与性能优化策略
+
+每个阶段完成后都会更新此README，记录实现细节和学习心得。
+
+## 🔄 当前进展
+
+### 已完成功能
+- 基础TCP服务器/客户端通信
+- 自定义Lightning二进制协议
+- 多种编解码器支持（Gob/JSON/Lightning）
+- 基于反射的对象序列化
+
+### 正在进行
+- Phase 1: 服务注册与真正的RPC方法调用
+
+### 下一步计划
+- 实现服务注册机制，支持动态方法注册
+- 开发客户端代理生成器
+- 建立统一的错误处理体系
