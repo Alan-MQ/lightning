@@ -22,7 +22,7 @@ func startServer(addr chan string) {
 	server.Accept(l)
 }
 
-func main() {
+func main1() {
 	log.SetFlags(0)
 	addr := make(chan string)
 	go startServer(addr)

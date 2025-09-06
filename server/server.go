@@ -8,9 +8,9 @@ import (
 	"net"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/Alan-MQ/lightning/codec"
+	"github.com/Alan-MQ/lightning/service"
 )
 
 type Serializer interface {
@@ -36,11 +36,25 @@ var LightningOption = &Option{
 }
 
 // Server represents an RPC Server.
-type Server struct{}
+type Server struct {
+	serviceRegistry *service.ServiceRegistry
+}
 
 // NewServer returns a new Server.
 func NewServer() *Server {
-	return &Server{}
+	return &Server{
+		serviceRegistry: service.NewServiceRegistry(),
+	}
+}
+
+// Register 注册服务到服务器
+func (server *Server) Register(rcvr interface{}) error {
+	return server.serviceRegistry.Register(rcvr)
+}
+
+// RegisterName 使用指定名称注册服务到服务器
+func (server *Server) RegisterName(name string, rcvr interface{}) error {
+	return server.serviceRegistry.RegisterName(name, rcvr)
 }
 
 // DefaultServer is the default instance of *Server.
@@ -113,11 +127,46 @@ func (server *Server) readRequest(cc codec.Codec) (*request, error) {
 		return nil, err
 	}
 	req := &request{h: h}
-	// TODO: now we don't know the type of request argv
-	// day 1, just suppose it's string
-	req.argv = reflect.New(reflect.TypeOf(""))
-	if err = cc.ReadBody(req.argv.Interface()); err != nil {
+	
+	// 解析服务名和方法名
+	dot := len(h.ServiceMethod) - 1
+	for i := len(h.ServiceMethod) - 1; i >= 0; i-- {
+		if h.ServiceMethod[i] == '.' {
+			dot = i
+			break
+		}
+	}
+	
+	if dot >= len(h.ServiceMethod) - 1 {
+		return req, fmt.Errorf("service/method request ill-formed: %s", h.ServiceMethod)
+	}
+	
+	serviceName := h.ServiceMethod[:dot]
+	methodName := h.ServiceMethod[dot+1:]
+	
+	// 查找服务和方法
+	svc, ok := server.serviceRegistry.GetService(serviceName)
+	if !ok {
+		return req, fmt.Errorf("service not found: %s", serviceName)
+	}
+	
+	method, ok := svc.Method(methodName)
+	if !ok {
+		return req, fmt.Errorf("method not found: %s.%s", serviceName, methodName)
+	}
+	
+	// 创建正确类型的参数实例
+	req.argv = reflect.New(method.ArgType.Elem())
+	req.replyv = reflect.New(method.ReplyType.Elem())
+	
+	// 读取请求体数据
+	argvi := req.argv.Interface()
+	if req.argv.Type().Kind() != reflect.Ptr {
+		argvi = req.argv.Elem().Interface()
+	}
+	if err = cc.ReadBody(argvi); err != nil {
 		log.Println("rpc server: read argv err:", err)
+		return req, err
 	}
 	return req, nil
 }
@@ -131,12 +180,16 @@ func (server *Server) sendResponse(cc codec.Codec, h *codec.Header, body interfa
 }
 
 func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
-	// TODO, should call registered rpc methods to get the right replyv
-	// day 1, just print argv and send a hello message
 	defer wg.Done()
-	log.Println(req.h, req.argv.Elem())
-	req.replyv = reflect.ValueOf(fmt.Sprintf("geerpc resp %d", req.h.Seq))
-	time.Sleep(8 * time.Second)
+	
+	// 使用服务注册中心调用真正的方法
+	err := server.serviceRegistry.Call(req.h.ServiceMethod, req.argv, req.replyv)
+	if err != nil {
+		req.h.Error = err.Error()
+		server.sendResponse(cc, req.h, invalidRequest, sending)
+		return
+	}
+	
 	server.sendResponse(cc, req.h, req.replyv.Interface(), sending)
 }
 
